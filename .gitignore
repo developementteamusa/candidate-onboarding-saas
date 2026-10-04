@@ -1,0 +1,30 @@
+# Environment
+.env
+.env.local
+.env.development
+.env.production
+
+# Node
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# notes
+
+commands.txt
