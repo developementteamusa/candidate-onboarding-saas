@@ -1,6 +1,15 @@
 fastapi
 uvicorn[standard]
+
 pydantic
 pydantic-settings
+email-validator
+
 pymongo[srv]
+
 python-dotenv
+
+PyJWT
+pwdlib[argon2]
+
+boto3

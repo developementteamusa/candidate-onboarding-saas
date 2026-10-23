@@ -35,6 +35,7 @@ def connect_to_mongodb():
 def close_mongodb_connection():
     if mongodb.client is not None:
         mongodb.client.close()
+
         mongodb.client = None
         mongodb.database = None
 
@@ -54,6 +55,8 @@ def ping_database():
 
     try:
         mongodb.client.admin.command("ping")
+
         return True
+
     except Exception:
         return False

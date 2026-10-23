@@ -4,7 +4,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+
 from app.core.config import get_settings
+
+from app.db.indexes import create_database_indexes
+
 from app.db.mongodb import (
     close_mongodb_connection,
     connect_to_mongodb,
@@ -17,6 +21,8 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     connect_to_mongodb()
+
+    create_database_indexes()
 
     yield
 
@@ -33,7 +39,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
+    allow_origins=[
+        settings.frontend_origin,
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -51,5 +59,6 @@ def root():
     return {
         "service": settings.app_name,
         "status": "running",
+        "version": settings.app_version,
         "docs": "/docs",
     }
