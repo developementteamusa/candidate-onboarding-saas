@@ -23,6 +23,15 @@ TARGET_FIELDS = {
 
 
 def get_textract_client():
+    """
+    Create an Amazon Textract client.
+
+    The S3 onboarding bucket and Textract
+    must use the same AWS Region when
+    AnalyzeID reads documents directly
+    from S3.
+    """
+
     if (
         settings.aws_textract_region
         != settings.aws_s3_region
@@ -44,6 +53,18 @@ def get_textract_client():
 def normalize_field_name(
     value: str,
 ):
+    """
+    Normalize Textract AnalyzeID field names.
+
+    Example:
+        FIRST NAME
+        FIRST-NAME
+        FIRST_NAME
+
+    all become:
+        FIRST_NAME
+    """
+
     value = (
         value
         .strip()
@@ -62,6 +83,20 @@ def normalize_field_name(
 def parse_identity_documents(
     response,
 ):
+    """
+    Parse the Amazon Textract AnalyzeID
+    response and return only the identity
+    fields needed by this SaaS.
+
+    Important behavior:
+    - ignores empty detections
+    - prefers AWS normalized values
+      where available
+    - keeps the strongest populated result
+      when a field appears on both sides
+      of the driver's license
+    """
+
     extracted = {}
 
     identity_documents = (
@@ -84,26 +119,25 @@ def parse_identity_documents(
         )
 
         for field in fields:
-            type_data = (
-                field.get(
-                    "Type",
-                    {},
-                )
+            type_data = field.get(
+                "Type",
+                {},
             )
 
-            value_data = (
-                field.get(
-                    "ValueDetection",
-                    {},
-                )
+            value_data = field.get(
+                "ValueDetection",
+                {},
             )
+
 
             raw_type = (
                 type_data.get(
                     "Text",
                     "",
                 )
+                or ""
             )
+
 
             normalized_type = (
                 normalize_field_name(
@@ -111,20 +145,26 @@ def parse_identity_documents(
                 )
             )
 
+
             output_field = (
                 TARGET_FIELDS.get(
                     normalized_type
                 )
             )
 
+
             if output_field is None:
                 continue
 
+
             raw_text = (
                 value_data.get(
-                    "Text"
+                    "Text",
+                    "",
                 )
-            )
+                or ""
+            ).strip()
+
 
             normalized_value = (
                 value_data
@@ -137,6 +177,38 @@ def parse_identity_documents(
                 )
             )
 
+
+            if isinstance(
+                normalized_value,
+                str,
+            ):
+                normalized_value = (
+                    normalized_value.strip()
+                )
+
+
+            # Prefer the normalized value
+            # when AWS provides one.
+            #
+            # This is particularly useful
+            # for fields such as dates.
+            value = (
+                normalized_value
+                or raw_text
+            )
+
+
+            # Ignore empty detections.
+            #
+            # AnalyzeID may emit the same
+            # normalized field for both sides
+            # of an ID document. An empty
+            # high-confidence result should
+            # never replace a populated one.
+            if not value:
+                continue
+
+
             confidence = float(
                 value_data.get(
                     "Confidence",
@@ -144,15 +216,14 @@ def parse_identity_documents(
                 )
             )
 
-            value = (
-                normalized_value
-                or raw_text
-            )
 
             candidate_value = {
                 "value": value,
 
-                "raw_text": raw_text,
+                "raw_text": (
+                    raw_text
+                    or value
+                ),
 
                 "confidence": round(
                     confidence,
@@ -164,20 +235,26 @@ def parse_identity_documents(
                 ),
             }
 
+
             existing = extracted.get(
                 output_field
             )
 
+
+            # Keep the populated result with
+            # the highest confidence.
             if (
                 existing is None
                 or confidence
-                > existing[
-                    "confidence"
-                ]
+                > existing.get(
+                    "confidence",
+                    0.0,
+                )
             ):
                 extracted[
                     output_field
                 ] = candidate_value
+
 
     return extracted
 
@@ -186,9 +263,27 @@ def analyze_driver_license(
     front_object_key: str,
     back_object_key: str,
 ):
+    """
+    Run Amazon Textract AnalyzeID against
+    the front and back of a driver's license
+    stored in the private onboarding S3 bucket.
+
+    Returns:
+        {
+            "fields": {...},
+            "model_version": "...",
+            "document_count": 2
+        }
+
+    Raises:
+        RuntimeError if Textract cannot
+        process the document.
+    """
+
     textract = (
         get_textract_client()
     )
+
 
     document_pages = [
         {
@@ -217,6 +312,7 @@ def analyze_driver_license(
             }
         },
     ]
+
 
     try:
         response = (
@@ -261,10 +357,27 @@ def analyze_driver_license(
             f"Message: {error_message}"
         )
 
+        print(
+            "Front object key:"
+        )
+
+        print(
+            front_object_key
+        )
+
+        print(
+            "Back object key:"
+        )
+
+        print(
+            back_object_key
+        )
+
         raise RuntimeError(
             "Unable to analyze driver's "
             "license."
         ) from exc
+
 
     except BotoCoreError as exc:
         print(

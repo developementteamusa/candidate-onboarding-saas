@@ -32,12 +32,40 @@ from app.modules.drivers_license.routes import (
     router as drivers_license_router,
 )
 
+from app.modules.onboarding_profile.routes import (
+    router as onboarding_profile_router,
+)
+
+from app.modules.background_authorization.routes import (
+    router as background_authorization_router,
+)
+
+from app.modules.background_checks.routes import (
+    router as background_checks_router,
+)
+
 api_router = APIRouter()
 
 
 api_router.include_router(
     health_router,
     tags=["Health"],
+)
+
+api_router.include_router(
+    background_checks_router,
+
+    tags=[
+        "Background Checks"
+    ],
+)
+
+api_router.include_router(
+    background_authorization_router,
+
+    tags=[
+        "Background Check Authorization"
+    ],
 )
 
 api_router.include_router(
@@ -74,5 +102,12 @@ api_router.include_router(
     drivers_license_router,
     tags=[
         "Driver's License Verification"
+    ],
+)
+
+api_router.include_router(
+    onboarding_profile_router,
+    tags=[
+        "Candidate Onboarding Profile"
     ],
 )

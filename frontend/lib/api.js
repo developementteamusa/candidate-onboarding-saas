@@ -514,3 +514,115 @@ export async function runCompanyDriversLicenseOcr(
     }
   );
 }
+
+export function getCandidateOnboardingProfile() {
+  return apiRequest(
+    "/onboarding-profile/candidate/current"
+  );
+}
+
+
+export async function saveCandidateOnboardingProfile(
+  profile
+) {
+  const csrfToken =
+    await getCandidateCsrfToken();
+
+  return apiRequest(
+    "/onboarding-profile/candidate/current",
+    {
+      method: "PUT",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+
+      body: JSON.stringify(
+        profile
+      ),
+    }
+  );
+}
+
+export async function resolveDriversLicenseMismatch(
+  applicationId,
+  resolutions
+) {
+  const csrfToken =
+    await getCsrfToken();
+
+  return apiRequest(
+    `/drivers-license/company/applications/${applicationId}/resolve-mismatch`,
+    {
+      method: "POST",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+
+      body: JSON.stringify({
+        resolutions,
+      }),
+    }
+  );
+}
+
+export function getBackgroundAuthorization() {
+  return apiRequest(
+    "/background-authorization/candidate/current"
+  );
+}
+
+
+export async function authorizeBackgroundCheck(
+  authorization
+) {
+  const csrfToken =
+    await getCandidateCsrfToken();
+
+  return apiRequest(
+    "/background-authorization/candidate/current",
+    {
+      method: "POST",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+
+      body: JSON.stringify(
+        authorization
+      ),
+    }
+  );
+}
+
+export function getCompanyBackgroundCheck(
+  applicationId
+) {
+  return apiRequest(
+    `/background-checks/company/applications/${applicationId}`
+  );
+}
+
+
+export async function startCompanyBackgroundCheck(
+  applicationId
+) {
+  const csrfToken =
+    await getCsrfToken();
+
+  return apiRequest(
+    `/background-checks/company/applications/${applicationId}/start`,
+    {
+      method: "POST",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+    }
+  );
+}

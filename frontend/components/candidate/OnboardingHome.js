@@ -15,6 +15,19 @@ import {
 const onboardingSections = [
   {
     title:
+      "Candidate Information",
+
+    description:
+      "Provide your identity and contact information before continuing onboarding.",
+
+    href:
+      "/candidate/onboarding/information",
+
+    enabled: true,
+  },
+  
+  {
+    title:
       "Driver's License Verification",
 
     description:
@@ -73,6 +86,20 @@ const onboardingSections = [
 
     enabled: false,
   },
+
+  {
+  title:
+    "Background Check Authorization",
+
+  description:
+    "Review the disclosure and authorize the company to proceed with your background check.",
+
+  href:
+    "/candidate/onboarding/background-authorization",
+
+  enabled: true,
+},
+
 ];
 
 

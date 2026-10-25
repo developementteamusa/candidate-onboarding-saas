@@ -281,3 +281,90 @@ def mark_ocr_failed(
             ),
         )
     )
+
+def save_comparison_result(
+    verification_id,
+    comparison_result,
+    status: str,
+):
+    db = get_database()
+
+    now = datetime.now(
+        timezone.utc
+    )
+
+    return (
+        db.driver_license_verifications
+        .find_one_and_update(
+            {
+                "_id": verification_id,
+            },
+
+            {
+                "$set": {
+                    "comparison_result": (
+                        comparison_result
+                    ),
+
+                    "status": status,
+
+                    "updated_at": now,
+                }
+            },
+
+            return_document=(
+                ReturnDocument.AFTER
+            ),
+        )
+    )
+
+def save_manual_resolution(
+    verification_id,
+    review_resolution,
+    verified_identity,
+    reviewed_by,
+):
+    db = get_database()
+
+    now = datetime.now(
+        timezone.utc
+    )
+
+    return (
+        db.driver_license_verifications
+        .find_one_and_update(
+            {
+                "_id": verification_id,
+
+                "status": (
+                    "REVIEW_REQUIRED"
+                ),
+            },
+
+            {
+                "$set": {
+                    "review_resolution": (
+                        review_resolution
+                    ),
+
+                    "verified_identity": (
+                        verified_identity
+                    ),
+
+                    "reviewed_by": (
+                        reviewed_by
+                    ),
+
+                    "reviewed_at": now,
+
+                    "status": "VERIFIED",
+
+                    "updated_at": now,
+                }
+            },
+
+            return_document=(
+                ReturnDocument.AFTER
+            ),
+        )
+    )

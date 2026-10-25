@@ -28,17 +28,6 @@ export default function ApplicationsManager() {
   const [message, setMessage] =
     useState("");
 
-  /*
-   * Temporary Phase 4 / Phase 6 UI permission.
-   *
-   * The backend remains the real security
-   * enforcement point through RBAC.
-   *
-   * Later we can replace this with the
-   * authenticated user's role.
-   */
-  const canInvite = true;
-
 
   async function loadApplications() {
     setError("");
@@ -159,7 +148,9 @@ export default function ApplicationsManager() {
 
   return (
     <div>
+
       <div className="mb-8">
+
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">
           Company Portal
         </p>
@@ -172,6 +163,7 @@ export default function ApplicationsManager() {
           Review applications and manage
           candidate onboarding.
         </p>
+
       </div>
 
 
@@ -202,9 +194,8 @@ export default function ApplicationsManager() {
                 application.status;
 
 
-              const showDriversLicense =
+              const onboardingStarted =
                 [
-                  "ONBOARDING_INVITED",
                   "ONBOARDING_IN_PROGRESS",
                   "ONBOARDING_COMPLETE",
                 ].includes(
@@ -214,27 +205,38 @@ export default function ApplicationsManager() {
 
               return (
                 <div
-                  key={application.id}
+                  key={
+                    application.id
+                  }
+
                   className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
                 >
+
                   <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
 
                     <div>
+
                       <h2 className="text-lg font-semibold text-slate-950">
                         {application.first_name}{" "}
                         {application.last_name}
                       </h2>
 
+
                       <p className="mt-1 text-sm text-slate-600">
-                        {application.email}
+                        {
+                          application.email
+                        }
                       </p>
+
 
                       <p className="mt-3 text-sm">
                         Status:{" "}
+
                         <span className="font-semibold text-slate-900">
                           {status}
                         </span>
                       </p>
+
                     </div>
 
 
@@ -277,36 +279,48 @@ export default function ApplicationsManager() {
 
 
                       {status ===
-                        "APPROVED" &&
-                        canInvite && (
-                          <button
-                            type="button"
+                        "APPROVED" && (
+                        <button
+                          type="button"
 
-                            onClick={() =>
-                              handleInvite(
-                                application.id
-                              )
-                            }
+                          onClick={() =>
+                            handleInvite(
+                              application.id
+                            )
+                          }
 
-                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                          >
-                            Send onboarding invite
-                          </button>
-                        )}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                        >
+                          Send onboarding invite
+                        </button>
+                      )}
 
 
-                      {showDriversLicense && (
+                      {onboardingStarted && (
                         <Link
                           href={`/dashboard/applications/${application.id}/drivers-license`}
+
                           className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           Driver&apos;s license
                         </Link>
                       )}
 
+
+                      {onboardingStarted && (
+                        <Link
+                          href={`/dashboard/applications/${application.id}/background-check`}
+
+                          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Background check
+                        </Link>
+                      )}
+
                     </div>
 
                   </div>
+
                 </div>
               );
             }
@@ -314,6 +328,7 @@ export default function ApplicationsManager() {
 
         </div>
       )}
+
     </div>
   );
 }

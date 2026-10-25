@@ -35,6 +35,10 @@ class DriversLicenseStatus(
         "OCR_FAILED"
     )
 
+    MATCH = (
+        "MATCH"
+    )
+
     REVIEW_REQUIRED = (
         "REVIEW_REQUIRED"
     )
@@ -51,6 +55,57 @@ class DriversLicenseSide(
     FRONT = "FRONT"
     BACK = "BACK"
 
+class IdentityResolutionChoice(
+    str,
+    Enum,
+):
+    USE_CANDIDATE_VALUE = (
+        "USE_CANDIDATE_VALUE"
+    )
+
+    USE_LICENSE_VALUE = (
+        "USE_LICENSE_VALUE"
+    )
+
+
+class IdentityFieldResolutionRequest(
+    BaseModel
+):
+    field_name: str = Field(
+        min_length=1,
+        max_length=100,
+    )
+
+    resolution: (
+        IdentityResolutionChoice
+    )
+
+
+class ResolveIdentityMismatchRequest(
+    BaseModel
+):
+    resolutions: list[
+        IdentityFieldResolutionRequest
+    ] = Field(
+        min_length=1
+    )
+
+class IdentityFieldResolutionPublic(
+    BaseModel
+):
+    candidate_value: str | None = None
+
+    extracted_value: str | None = None
+
+    selected_value: str | None = None
+
+    source: str
+
+    resolution: str
+
+    reviewed_by: str
+
+    reviewed_at: str | None = None
 
 class LinkDriversLicenseUploadRequest(
     BaseModel
@@ -73,6 +128,22 @@ class ExtractedIdentityField(
     confidence: float | None = None
 
     document_index: int | None = None
+
+
+class IdentityFieldComparison(
+    BaseModel
+):
+    candidate_value: str | None = None
+
+    extracted_value: str | None = None
+
+    normalized_candidate: str | None = None
+
+    normalized_extracted: str | None = None
+
+    result: str
+
+    confidence: float | None = None
 
 
 class DriversLicenseVerificationPublic(
@@ -102,6 +173,23 @@ class DriversLicenseVerificationPublic(
     ) = None
 
     ocr_error: str | None = None
+
+    comparison_result: dict[
+        str,
+        IdentityFieldComparison
+    ] | None = None
+
+    review_resolution: dict[
+        str,
+        IdentityFieldResolutionPublic
+    ] | None = None
+
+    verified_identity: dict[
+        str,
+        str | None
+    ] | None = None
+
+    overall_match: str | None = None
 
 
 class CompanyDriversLicenseReviewPublic(
