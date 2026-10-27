@@ -1,8 +1,28 @@
+
+
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
     status,
+)
+
+from fastapi import Depends
+
+from app.modules.auth.dependencies import (
+    require_company_user,
+)
+
+from app.modules.users.schemas import (
+    AuthenticatedUser,
+)
+
+from app.modules.onboarding.company_documents import (
+    list_company_documents,
+)
+
+from app.modules.onboarding.schemas import (
+    CompanyDocumentPublic,
 )
 
 from app.modules.auth.dependencies import (
@@ -34,6 +54,28 @@ from app.modules.onboarding.service import (
 from app.modules.users.schemas import (
     UserRole,
 )
+
+from fastapi import (
+    Depends,
+    HTTPException,
+)
+
+from app.modules.auth.dependencies import (
+    require_company_user,
+)
+
+from app.modules.users.schemas import (
+    AuthenticatedUser,
+)
+
+from app.modules.onboarding.document_view import (
+    create_company_document_view_url,
+)
+
+from app.modules.onboarding.schemas import (
+    CompanyDocumentViewPublic,
+)
+
 
 
 router = APIRouter(
@@ -201,4 +243,74 @@ def candidate_onboarding_status(
             application["_id"]
         ),
         status=application["status"],
+    )
+
+
+@router.get(
+    "/company/documents",
+    response_model=list[
+        CompanyDocumentPublic
+    ],
+)
+def get_company_documents(
+    current_user: AuthenticatedUser = Depends(
+        require_company_user
+    ),
+):
+    company_id = str(
+        current_user.company_id
+    )
+
+    documents = (
+        list_company_documents(
+            company_id
+        )
+    )
+
+    return [
+        CompanyDocumentPublic(
+            **document
+        )
+        for document
+        in documents
+    ]
+
+@router.get(
+    "/company/documents/{document_id}/view",
+    response_model=
+        CompanyDocumentViewPublic,
+)
+def view_company_document(
+    document_id: str,
+
+    current_user: AuthenticatedUser = Depends(
+        require_company_user
+    ),
+):
+    result = (
+        create_company_document_view_url(
+            company_id=str(
+                current_user.company_id
+            ),
+
+            document_id=
+                document_id,
+        )
+    )
+
+
+    if not result:
+        raise HTTPException(
+            status_code=404,
+
+            detail=(
+                "Document not found."
+            ),
+        )
+
+
+    return (
+        CompanyDocumentViewPublic(
+            **result
+        )
     )

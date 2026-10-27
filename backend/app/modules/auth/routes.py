@@ -38,6 +38,19 @@ from app.modules.users.repository import (
     increment_token_version,
 )
 
+from fastapi import (
+    HTTPException,
+)
+
+from app.modules.auth.company_registration import (
+    register_company,
+)
+
+from app.modules.auth.schemas import (
+    CompanyRegisterPublic,
+    CompanyRegisterRequest,
+)
+
 
 router = APIRouter(
     prefix="/auth",
@@ -185,4 +198,66 @@ def logout(
 
     return LogoutResponse(
         message="Logout successful"
+    )
+
+@router.post(
+    "/company/register",
+    response_model=(
+        CompanyRegisterPublic
+    ),
+    status_code=201,
+)
+def create_company_account(
+    payload: CompanyRegisterRequest,
+):
+    result, error = (
+        register_company(
+            payload
+        )
+    )
+
+
+    if (
+        error
+        == "EMAIL_ALREADY_EXISTS"
+    ):
+        raise HTTPException(
+            status_code=409,
+
+            detail=(
+                "An account already exists "
+                "with this email address."
+            ),
+        )
+
+
+    if (
+        error
+        == "COMPANY_ALREADY_EXISTS"
+    ):
+        raise HTTPException(
+            status_code=409,
+
+            detail=(
+                "Unable to create company "
+                "workspace."
+            ),
+        )
+
+
+    if (
+        error
+        == "INVALID_COMPANY_NAME"
+    ):
+        raise HTTPException(
+            status_code=400,
+
+            detail=(
+                "Invalid company name."
+            ),
+        )
+
+
+    return CompanyRegisterPublic(
+        **result
     )

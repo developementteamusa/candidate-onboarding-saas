@@ -1,68 +1,297 @@
-import { config } from "@/lib/config";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL;
 
+if (!API_BASE_URL) {
+  throw new Error(
+    "NEXT_PUBLIC_API_BASE_URL is not configured."
+  );
+}
+/* =========================================================
+   CORE API REQUEST
+========================================================= */
 
 export async function apiRequest(
-  endpoint,
+  path,
   options = {}
 ) {
-  const isServer =
-    typeof window === "undefined";
+  const {
+    headers: customHeaders = {},
+    body,
+    ...restOptions
+  } = options;
 
-  const baseUrl = isServer
-    ? config.internalApiBaseUrl
-    : config.publicApiBaseUrl;
 
-  const url = `${baseUrl}${endpoint}`;
+  const headers = {
+    Accept: "application/json",
+    ...customHeaders,
+  };
 
-  const response = await fetch(url, {
-    ...options,
 
-    credentials: "include",
+  /*
+   * Automatically use JSON Content-Type
+   * unless the body is FormData.
+   */
+  if (
+    body !== undefined &&
+    body !== null &&
+    !(body instanceof FormData)
+  ) {
+    if (!headers["Content-Type"]) {
+      headers["Content-Type"] =
+        "application/json";
+    }
+  }
 
-    cache: "no-store",
 
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
+  const response =
+    await fetch(
+      `${API_BASE_URL}${path}`,
+      {
+        ...restOptions,
+        body,
+        headers,
+        credentials: "include",
+      }
+    );
+
+
+  if (response.status === 204) {
+    return null;
+  }
+
+
+  const contentType =
+    response.headers.get(
+      "content-type"
+    ) || "";
+
 
   let data = null;
 
-  const contentType =
-    response.headers.get("content-type");
 
   if (
-    contentType &&
-    contentType.includes("application/json")
+    contentType.includes(
+      "application/json"
+    )
   ) {
-    data = await response.json();
+    try {
+      data =
+        await response.json();
+    } catch {
+      data = null;
+    }
+
+  } else {
+    try {
+      const text =
+        await response.text();
+
+      data =
+        text
+          ? {
+              detail: text,
+            }
+          : null;
+
+    } catch {
+      data = null;
+    }
   }
+
 
   if (!response.ok) {
-    const error = new Error(
-      data?.detail ||
-        `API request failed with status ${response.status}`
+    throw new Error(
+      extractApiError(
+        data,
+        response.status
+      )
     );
-
-    error.status = response.status;
-    error.data = data;
-
-    throw error;
   }
+
 
   return data;
 }
 
 
-export async function getCsrfToken() {
-  const response = await apiRequest(
-    "/auth/csrf"
-  );
+/* =========================================================
+   ERROR NORMALIZATION
+========================================================= */
 
-  return response.csrf_token;
+function extractApiError(
+  data,
+  status
+) {
+  if (!data) {
+    return (
+      `API request failed with status ${status}`
+    );
+  }
+
+
+  if (
+    typeof data.detail ===
+    "string"
+  ) {
+    return data.detail;
+  }
+
+
+  if (
+    Array.isArray(
+      data.detail
+    )
+  ) {
+    const messages =
+      data.detail
+        .map(
+          (item) => {
+            if (
+              typeof item ===
+              "string"
+            ) {
+              return item;
+            }
+
+            if (
+              typeof item?.msg ===
+              "string"
+            ) {
+              return item.msg;
+            }
+
+            if (
+              typeof item?.message ===
+              "string"
+            ) {
+              return item.message;
+            }
+
+            return null;
+          }
+        )
+        .filter(Boolean);
+
+
+    if (
+      messages.length > 0
+    ) {
+      return messages.join(
+        ", "
+      );
+    }
+  }
+
+
+  if (
+    data.detail &&
+    typeof data.detail ===
+    "object"
+  ) {
+    if (
+      typeof data.detail.message ===
+      "string"
+    ) {
+      return data.detail.message;
+    }
+
+
+    if (
+      typeof data.detail.error ===
+      "string"
+    ) {
+      return data.detail.error;
+    }
+
+
+    if (
+      typeof data.detail.detail ===
+      "string"
+    ) {
+      return data.detail.detail;
+    }
+
+
+    try {
+      return JSON.stringify(
+        data.detail
+      );
+    } catch {
+      return (
+        `API request failed with status ${status}`
+      );
+    }
+  }
+
+
+  if (
+    typeof data.message ===
+    "string"
+  ) {
+    return data.message;
+  }
+
+
+  if (
+    typeof data.error ===
+    "string"
+  ) {
+    return data.error;
+  }
+
+
+  try {
+    const serialized =
+      JSON.stringify(
+        data
+      );
+
+
+    if (
+      serialized &&
+      serialized !== "{}"
+    ) {
+      return serialized;
+    }
+
+  } catch {
+    // Ignore serialization failure.
+  }
+
+
+  return (
+    `API request failed with status ${status}`
+  );
 }
 
+
+/* =========================================================
+   COMPANY CSRF
+========================================================= */
+
+export async function getCsrfToken() {
+  const result =
+    await apiRequest(
+      "/auth/csrf",
+      {
+        method: "GET",
+      }
+    );
+
+
+  if (!result?.csrf_token) {
+    throw new Error(
+      "CSRF token was not returned."
+    );
+  }
+
+
+  return result.csrf_token;
+}
+
+
+/* =========================================================
+   COMPANY AUTHENTICATION
+========================================================= */
 
 export async function login(
   email,
@@ -71,19 +300,22 @@ export async function login(
   const csrfToken =
     await getCsrfToken();
 
+
   return apiRequest(
     "/auth/login",
     {
       method: "POST",
 
       headers: {
-        "X-CSRF-Token": csrfToken,
+        "X-CSRF-Token":
+          csrfToken,
       },
 
-      body: JSON.stringify({
-        email,
-        password,
-      }),
+      body:
+        JSON.stringify({
+          email,
+          password,
+        }),
     }
   );
 }
@@ -93,13 +325,15 @@ export async function logout() {
   const csrfToken =
     await getCsrfToken();
 
+
   return apiRequest(
     "/auth/logout",
     {
       method: "POST",
 
       headers: {
-        "X-CSRF-Token": csrfToken,
+        "X-CSRF-Token":
+          csrfToken,
       },
     }
   );
@@ -108,83 +342,100 @@ export async function logout() {
 
 export function getCurrentUser() {
   return apiRequest(
-    "/auth/me"
-  );
-}
-
-
-export function getCurrentCompany() {
-  return apiRequest(
-    "/company/me"
-  );
-}
-
-
-export function getApiHealth() {
-  return apiRequest(
-    "/health"
-  );
-}
-
-
-export function getDatabaseHealth() {
-  return apiRequest(
-    "/health/db"
-  );
-}
-
-export function getPublicCompany(
-  companySlug
-) {
-  return apiRequest(
-    `/company/public/${encodeURIComponent(
-      companySlug
-    )}`
-  );
-}
-
-
-export async function getCandidateCsrfToken() {
-  const response = await apiRequest(
-    "/candidate-auth/csrf"
-  );
-
-  return response.csrf_token;
-}
-
-
-export async function registerCandidate(
-  companySlug,
-  firstName,
-  lastName,
-  email,
-  password
-) {
-  const csrfToken =
-    await getCandidateCsrfToken();
-
-  return apiRequest(
-    "/candidate-auth/register",
+    "/auth/me",
     {
-      method: "POST",
-
-      headers: {
-        "X-CSRF-Token": csrfToken,
-      },
-
-      body: JSON.stringify({
-        company_slug: companySlug,
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        password,
-      }),
+      method: "GET",
     }
   );
 }
 
 
-export async function loginCandidate(
+/* =========================================================
+   COMPANY REGISTRATION
+========================================================= */
+
+export async function registerCompanyAccount(
+  payload
+) {
+  const csrfToken =
+    await getCsrfToken();
+
+
+  return apiRequest(
+    "/auth/company/register",
+    {
+      method: "POST",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
+
+
+/*
+ * Compatibility alias.
+ */
+export async function registerCompany(
+  payload
+) {
+  return registerCompanyAccount(
+    payload
+  );
+}
+
+
+/* =========================================================
+   COMPANY PROFILE
+========================================================= */
+
+export function getCompanyProfile() {
+  return apiRequest(
+    "/company/me",
+    {
+      method: "GET",
+    }
+  );
+}
+
+
+/* =========================================================
+   CANDIDATE CSRF
+========================================================= */
+
+export async function getCandidateCsrfToken() {
+  const result =
+    await apiRequest(
+      "/candidate-auth/csrf",
+      {
+        method: "GET",
+      }
+    );
+
+
+  if (!result?.csrf_token) {
+    throw new Error(
+      "Candidate CSRF token was not returned."
+    );
+  }
+
+
+  return result.csrf_token;
+}
+
+
+/* =========================================================
+   CANDIDATE AUTHENTICATION
+========================================================= */
+
+export async function candidateLogin(
   companySlug,
   email,
   password
@@ -198,11 +449,14 @@ export async function loginCandidate(
       method: "POST",
 
       headers: {
-        "X-CSRF-Token": csrfToken,
+        "X-CSRF-Token":
+          csrfToken,
       },
 
       body: JSON.stringify({
-        company_slug: companySlug,
+        company_slug:
+          companySlug,
+
         email,
         password,
       }),
@@ -210,30 +464,100 @@ export async function loginCandidate(
   );
 }
 
+export async function candidateLogout() {
+  const csrfToken =
+    await getCandidateCsrfToken();
+
+
+  return apiRequest(
+    "/candidate-auth/logout",
+    {
+      method: "POST",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+    }
+  );
+}
+
+
+export function getCurrentCandidate() {
+  return apiRequest(
+    "/candidate-auth/me",
+    {
+      method: "GET",
+    }
+  );
+}
+
+
+/* =========================================================
+   CANDIDATE REGISTRATION
+========================================================= */
+
+export async function registerCandidate(
+  payload
+) {
+  const csrfToken =
+    await getCandidateCsrfToken();
+
+
+  return apiRequest(
+    "/candidate-auth/register",
+    {
+      method: "POST",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
+
+
+/* =========================================================
+   CANDIDATE APPLICATION
+========================================================= */
 
 export function getCandidateApplication() {
   return apiRequest(
-    "/applications/candidate/current"
+    "/applications/candidate",
+    {
+      method: "GET",
+    }
   );
 }
 
 
 export async function saveCandidateApplication(
-  application
+  payload
 ) {
   const csrfToken =
     await getCandidateCsrfToken();
 
+
   return apiRequest(
-    "/applications/candidate/current",
+    "/applications/candidate",
     {
       method: "PUT",
 
       headers: {
-        "X-CSRF-Token": csrfToken,
+        "X-CSRF-Token":
+          csrfToken,
       },
 
-      body: JSON.stringify(application),
+      body:
+        JSON.stringify(
+          payload
+        ),
     }
   );
 }
@@ -243,25 +567,50 @@ export async function submitCandidateApplication() {
   const csrfToken =
     await getCandidateCsrfToken();
 
+
   return apiRequest(
-    "/applications/candidate/current/submit",
+    "/applications/candidate/submit",
     {
       method: "POST",
 
       headers: {
-        "X-CSRF-Token": csrfToken,
+        "X-CSRF-Token":
+          csrfToken,
       },
     }
   );
 }
 
 
+/* =========================================================
+   COMPANY APPLICATIONS
+========================================================= */
+
 export function getCompanyApplications() {
   return apiRequest(
-    "/applications/company"
+    "/applications/company",
+    {
+      method: "GET",
+    }
   );
 }
 
+
+export function getCompanyApplication(
+  applicationId
+) {
+  return apiRequest(
+    `/applications/company/${applicationId}`,
+    {
+      method: "GET",
+    }
+  );
+}
+
+
+/* =========================================================
+   APPLICATION WORKFLOW
+========================================================= */
 
 export async function startApplicationReview(
   applicationId
@@ -269,17 +618,20 @@ export async function startApplicationReview(
   const csrfToken =
     await getCsrfToken();
 
+
   return apiRequest(
     `/applications/company/${applicationId}/review`,
     {
       method: "POST",
 
       headers: {
-        "X-CSRF-Token": csrfToken,
+        "X-CSRF-Token":
+          csrfToken,
       },
     }
   );
 }
+
 
 export async function approveApplication(
   applicationId
@@ -287,17 +639,20 @@ export async function approveApplication(
   const csrfToken =
     await getCsrfToken();
 
+
   return apiRequest(
     `/applications/company/${applicationId}/approve`,
     {
       method: "POST",
 
       headers: {
-        "X-CSRF-Token": csrfToken,
+        "X-CSRF-Token":
+          csrfToken,
       },
     }
   );
 }
+
 
 export async function sendOnboardingInvitation(
   applicationId
@@ -305,168 +660,231 @@ export async function sendOnboardingInvitation(
   const csrfToken =
     await getCsrfToken();
 
+
   return apiRequest(
-    `/onboarding/company/applications/${applicationId}/invite`,
+    `/applications/company/${applicationId}/onboarding-invite`,
     {
       method: "POST",
 
       headers: {
-        "X-CSRF-Token": csrfToken,
+        "X-CSRF-Token":
+          csrfToken,
       },
     }
   );
 }
 
 
-export async function acceptOnboardingInvitation(
-  token
-) {
-  const csrfToken =
-    await getCandidateCsrfToken();
 
+/* =========================================================
+   CANDIDATE ONBOARDING
+========================================================= */
+
+export function getCandidateOnboarding() {
   return apiRequest(
-    "/onboarding/candidate/accept",
+    "/onboarding/candidate/status",
     {
-      method: "POST",
-
-      headers: {
-        "X-CSRF-Token": csrfToken,
-      },
-
-      body: JSON.stringify({
-        token,
-      }),
+      method: "GET",
     }
   );
 }
 
+/* =========================================================
+   CANDIDATE ONBOARDING - COMPATIBILITY EXPORT
+========================================================= */
 
 export function getCandidateOnboardingStatus() {
-  return apiRequest(
-    "/onboarding/candidate/status"
-  );
+  return getCandidateOnboarding();
 }
 
-export async function requestSecureUpload({
-  section,
-  filename,
-  contentType,
-  fileSize,
-}) {
-  const csrfToken =
-    await getCandidateCsrfToken();
 
+/* =========================================================
+   CANDIDATE INFORMATION
+========================================================= */
+
+/* =========================================================
+   CANDIDATE INFORMATION / ONBOARDING PROFILE
+========================================================= */
+
+export function getCandidateInformation() {
   return apiRequest(
-    "/storage/candidate/upload-url",
+    "/onboarding/candidate/information",
     {
-      method: "POST",
-
-      headers: {
-        "X-CSRF-Token": csrfToken,
-      },
-
-      body: JSON.stringify({
-        section,
-        filename,
-        content_type: contentType,
-        file_size: fileSize,
-      }),
+      method: "GET",
     }
   );
 }
 
 
-export async function uploadFileToS3(
-  uploadUrl,
-  file,
-  requiredHeaders
+export async function saveCandidateInformation(
+  payload
 ) {
-  const response = await fetch(
-    uploadUrl,
+  const csrfToken =
+    await getCandidateCsrfToken();
+
+
+  return apiRequest(
+    "/onboarding/candidate/information",
     {
       method: "PUT",
 
       headers: {
-        ...requiredHeaders,
+        "X-CSRF-Token":
+          csrfToken,
       },
 
-      body: file,
+      body:
+        JSON.stringify(
+          payload
+        ),
     }
-  );
-
-  if (!response.ok) {
-    const responseText =
-      await response.text();
-
-    console.error(
-      "S3 upload failed"
-    );
-
-    console.error(
-      "HTTP status:",
-      response.status
-    );
-
-    console.error(
-      "S3 response:",
-      responseText
-    );
-
-    console.error(
-      "Required headers:",
-      requiredHeaders
-    );
-
-    throw new Error(
-      `S3 upload failed with status ${response.status}: ${responseText}`
-    );
-  }
-
-  return response.headers.get(
-    "ETag"
   );
 }
 
 
-export async function completeSecureUpload(
-  uploadId
+/* =========================================================
+   LEGACY COMPATIBILITY EXPORTS
+
+   Existing CandidateInformationForm.js expects these
+   function names.
+========================================================= */
+
+export function getCandidateOnboardingProfile() {
+  return getCandidateInformation();
+}
+
+
+export async function saveCandidateOnboardingProfile(
+  payload
+) {
+  return saveCandidateInformation(
+    payload
+  );
+}
+
+
+/* =========================================================
+   SECURE FILE UPLOAD
+========================================================= */
+
+export async function requestSecureUpload(
+  payload
 ) {
   const csrfToken =
     await getCandidateCsrfToken();
 
+
   return apiRequest(
-    "/storage/candidate/complete",
+    "/onboarding/files/upload-request",
     {
       method: "POST",
 
       headers: {
-        "X-CSRF-Token": csrfToken,
+        "X-CSRF-Token":
+          csrfToken,
       },
 
-      body: JSON.stringify({
-        upload_id: uploadId,
-      }),
+      body:
+        JSON.stringify(
+          payload
+        ),
     }
   );
 }
 
 
-export function getCandidateFiles() {
+/*
+ * Presigned S3 URL upload.
+ * This deliberately does not use apiRequest().
+ */
+export async function uploadFileToS3(
+  uploadUrl,
+  file,
+  extraHeaders = {}
+) {
+  const response =
+    await fetch(
+      uploadUrl,
+      {
+        method: "PUT",
+
+        headers: {
+          "Content-Type":
+            file.type ||
+            "application/octet-stream",
+
+          ...extraHeaders,
+        },
+
+        body: file,
+      }
+    );
+
+
+  if (!response.ok) {
+    throw new Error(
+      `S3 upload failed with status ${response.status}`
+    );
+  }
+
+
+  return true;
+}
+
+
+export async function completeSecureUpload(
+  payload
+) {
+  const csrfToken =
+    await getCandidateCsrfToken();
+
+
   return apiRequest(
-    "/storage/candidate/files"
+    "/onboarding/files/upload-complete",
+    {
+      method: "POST",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
   );
 }
+
+
+/* =========================================================
+   DRIVER'S LICENSE - CANDIDATE
+========================================================= */
+
+export function getCandidateDriverLicense() {
+  return apiRequest(
+    "/drivers-license/candidate",
+    {
+      method: "GET",
+    }
+  );
+}
+
+/* =========================================================
+   DRIVER'S LICENSE - LEGACY COMPATIBILITY
+========================================================= */
 
 export function getDriversLicenseStatus() {
-  return apiRequest(
-    "/drivers-license/candidate/status"
-  );
+  return getCandidateDriverLicense();
 }
 
+/* =========================================================
+   DRIVER'S LICENSE - LINK SECURE UPLOAD
+========================================================= */
 
 export async function linkDriversLicenseUpload(
-  uploadId,
-  side
+  uploadId
 ) {
   const csrfToken =
     await getCandidateCsrfToken();
@@ -477,22 +895,157 @@ export async function linkDriversLicenseUpload(
       method: "POST",
 
       headers: {
-        "X-CSRF-Token": csrfToken,
+        "X-CSRF-Token":
+          csrfToken,
       },
 
-      body: JSON.stringify({
-        upload_id: uploadId,
-        side,
-      }),
+      body:
+        JSON.stringify({
+          upload_id:
+            uploadId,
+        }),
     }
   );
 }
 
-export function getCompanyDriversLicenseReview(
+
+export async function uploadCandidateDriverLicense(
+  side,
+  file
+) {
+  const csrfToken =
+    await getCandidateCsrfToken();
+
+
+  const formData =
+    new FormData();
+
+
+  formData.append(
+    "side",
+    side
+  );
+
+
+  formData.append(
+    "file",
+    file
+  );
+
+
+  return apiRequest(
+    "/drivers-license/candidate/upload",
+    {
+      method: "POST",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+
+      body:
+        formData,
+    }
+  );
+}
+
+
+/* =========================================================
+   DRIVER'S LICENSE - COMPANY
+========================================================= */
+
+export function getCompanyDriverLicense(
   applicationId
 ) {
   return apiRequest(
-    `/drivers-license/company/applications/${applicationId}`
+    `/drivers-license/company/applications/${applicationId}`,
+    {
+      method: "GET",
+    }
+  );
+}
+
+
+export async function processCompanyDriverLicense(
+  applicationId
+) {
+  const csrfToken =
+    await getCsrfToken();
+
+
+  return apiRequest(
+    `/drivers-license/company/applications/${applicationId}/process`,
+    {
+      method: "POST",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+    }
+  );
+}
+
+
+/* =========================================================
+   DRIVER'S LICENSE MISMATCH
+========================================================= */
+
+export async function resolveDriverLicenseMismatch(
+  applicationId,
+  payload
+) {
+  const csrfToken =
+    await getCsrfToken();
+
+
+  return apiRequest(
+    `/drivers-license/company/applications/${applicationId}/resolve`,
+    {
+      method: "POST",
+
+      headers: {
+        "X-CSRF-Token":
+          csrfToken,
+      },
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
+
+
+/* =========================================================
+   DRIVER'S LICENSE LEGACY COMPATIBILITY
+========================================================= */
+
+/*
+ * Existing DriversLicenseReview.js expects:
+ *
+ * getCompanyDriversLicenseReview
+ * resolveDriversLicenseMismatch
+ * runCompanyDriversLicenseOcr
+ */
+
+export function getCompanyDriversLicenseReview(
+  applicationId
+) {
+  return getCompanyDriverLicense(
+    applicationId
+  );
+}
+
+
+export async function resolveDriversLicenseMismatch(
+  applicationId,
+  payload
+) {
+  return resolveDriverLicenseMismatch(
+    applicationId,
+    payload
   );
 }
 
@@ -500,60 +1053,35 @@ export function getCompanyDriversLicenseReview(
 export async function runCompanyDriversLicenseOcr(
   applicationId
 ) {
-  const csrfToken =
-    await getCsrfToken();
+  return processCompanyDriverLicense(
+    applicationId
+  );
+}
 
+
+/* =========================================================
+   BACKGROUND AUTHORIZATION - CANDIDATE
+========================================================= */
+
+export function getCandidateBackgroundAuthorization() {
   return apiRequest(
-    `/drivers-license/company/applications/${applicationId}/run-ocr`,
+    "/background-checks/candidate/authorization",
     {
-      method: "POST",
-
-      headers: {
-        "X-CSRF-Token": csrfToken,
-      },
+      method: "GET",
     }
   );
 }
 
-export function getCandidateOnboardingProfile() {
-  return apiRequest(
-    "/onboarding-profile/candidate/current"
-  );
-}
 
-
-export async function saveCandidateOnboardingProfile(
-  profile
+export async function authorizeCandidateBackgroundCheck(
+  payload
 ) {
   const csrfToken =
     await getCandidateCsrfToken();
 
-  return apiRequest(
-    "/onboarding-profile/candidate/current",
-    {
-      method: "PUT",
-
-      headers: {
-        "X-CSRF-Token":
-          csrfToken,
-      },
-
-      body: JSON.stringify(
-        profile
-      ),
-    }
-  );
-}
-
-export async function resolveDriversLicenseMismatch(
-  applicationId,
-  resolutions
-) {
-  const csrfToken =
-    await getCsrfToken();
 
   return apiRequest(
-    `/drivers-license/company/applications/${applicationId}/resolve-mismatch`,
+    "/background-checks/candidate/authorization",
     {
       method: "POST",
 
@@ -562,48 +1090,27 @@ export async function resolveDriversLicenseMismatch(
           csrfToken,
       },
 
-      body: JSON.stringify({
-        resolutions,
-      }),
+      body:
+        JSON.stringify(
+          payload
+        ),
     }
   );
 }
 
-export function getBackgroundAuthorization() {
-  return apiRequest(
-    "/background-authorization/candidate/current"
-  );
-}
 
-
-export async function authorizeBackgroundCheck(
-  authorization
-) {
-  const csrfToken =
-    await getCandidateCsrfToken();
-
-  return apiRequest(
-    "/background-authorization/candidate/current",
-    {
-      method: "POST",
-
-      headers: {
-        "X-CSRF-Token":
-          csrfToken,
-      },
-
-      body: JSON.stringify(
-        authorization
-      ),
-    }
-  );
-}
+/* =========================================================
+   BACKGROUND CHECK - COMPANY
+========================================================= */
 
 export function getCompanyBackgroundCheck(
   applicationId
 ) {
   return apiRequest(
-    `/background-checks/company/applications/${applicationId}`
+    `/background-checks/company/applications/${applicationId}`,
+    {
+      method: "GET",
+    }
   );
 }
 
@@ -614,8 +1121,9 @@ export async function startCompanyBackgroundCheck(
   const csrfToken =
     await getCsrfToken();
 
+
   return apiRequest(
-    `/background-checks/company/applications/${applicationId}/start`,
+    `/background-checks/company/applications/${applicationId}`,
     {
       method: "POST",
 
@@ -623,6 +1131,46 @@ export async function startCompanyBackgroundCheck(
         "X-CSRF-Token":
           csrfToken,
       },
+    }
+  );
+}
+
+
+/* =========================================================
+   COMPANY DOCUMENTS
+========================================================= */
+
+export function getCompanyDocuments() {
+  return apiRequest(
+    "/onboarding/company/documents",
+    {
+      method: "GET",
+    }
+  );
+}
+
+
+export function getCompanyDocumentView(
+  documentId
+) {
+  return apiRequest(
+    `/onboarding/company/documents/${documentId}/view`,
+    {
+      method: "GET",
+    }
+  );
+}
+
+
+/* =========================================================
+   HEALTH
+========================================================= */
+
+export function healthCheck() {
+  return apiRequest(
+    "/health",
+    {
+      method: "GET",
     }
   );
 }
