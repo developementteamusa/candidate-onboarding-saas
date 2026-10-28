@@ -6,6 +6,8 @@ if (!API_BASE_URL) {
     "NEXT_PUBLIC_API_BASE_URL is not configured."
   );
 }
+
+
 /* =========================================================
    CORE API REQUEST
 ========================================================= */
@@ -27,10 +29,6 @@ export async function apiRequest(
   };
 
 
-  /*
-   * Automatically use JSON Content-Type
-   * unless the body is FormData.
-   */
   if (
     body !== undefined &&
     body !== null &&
@@ -77,6 +75,7 @@ export async function apiRequest(
     try {
       data =
         await response.json();
+
     } catch {
       data = null;
     }
@@ -215,6 +214,7 @@ function extractApiError(
       return JSON.stringify(
         data.detail
       );
+
     } catch {
       return (
         `API request failed with status ${status}`
@@ -245,7 +245,6 @@ function extractApiError(
         data
       );
 
-
     if (
       serialized &&
       serialized !== "{}"
@@ -254,7 +253,7 @@ function extractApiError(
     }
 
   } catch {
-    // Ignore serialization failure.
+    // Ignore.
   }
 
 
@@ -290,7 +289,7 @@ export async function getCsrfToken() {
 
 
 /* =========================================================
-   COMPANY AUTHENTICATION
+   COMPANY AUTH
 ========================================================= */
 
 export async function login(
@@ -380,9 +379,6 @@ export async function registerCompanyAccount(
 }
 
 
-/*
- * Compatibility alias.
- */
 export async function registerCompany(
   payload
 ) {
@@ -432,7 +428,7 @@ export async function getCandidateCsrfToken() {
 
 
 /* =========================================================
-   CANDIDATE AUTHENTICATION
+   CANDIDATE AUTH
 ========================================================= */
 
 export async function candidateLogin(
@@ -442,6 +438,7 @@ export async function candidateLogin(
 ) {
   const csrfToken =
     await getCandidateCsrfToken();
+
 
   return apiRequest(
     "/candidate-auth/login",
@@ -453,16 +450,19 @@ export async function candidateLogin(
           csrfToken,
       },
 
-      body: JSON.stringify({
-        company_slug:
-          companySlug,
+      body:
+        JSON.stringify({
+          company_slug:
+            companySlug,
 
-        email,
-        password,
-      }),
+          email,
+
+          password,
+        }),
     }
   );
 }
+
 
 export async function candidateLogout() {
   const csrfToken =
@@ -675,7 +675,6 @@ export async function sendOnboardingInvitation(
 }
 
 
-
 /* =========================================================
    CANDIDATE ONBOARDING
 ========================================================= */
@@ -689,9 +688,6 @@ export function getCandidateOnboarding() {
   );
 }
 
-/* =========================================================
-   CANDIDATE ONBOARDING - COMPATIBILITY EXPORT
-========================================================= */
 
 export function getCandidateOnboardingStatus() {
   return getCandidateOnboarding();
@@ -699,16 +695,12 @@ export function getCandidateOnboardingStatus() {
 
 
 /* =========================================================
-   CANDIDATE INFORMATION
-========================================================= */
-
-/* =========================================================
-   CANDIDATE INFORMATION / ONBOARDING PROFILE
+   CANDIDATE INFORMATION / PROFILE
 ========================================================= */
 
 export function getCandidateInformation() {
   return apiRequest(
-    "/onboarding/candidate/information",
+    "/onboarding-profile/candidate/current",
     {
       method: "GET",
     }
@@ -724,7 +716,7 @@ export async function saveCandidateInformation(
 
 
   return apiRequest(
-    "/onboarding/candidate/information",
+    "/onboarding-profile/candidate/current",
     {
       method: "PUT",
 
@@ -741,13 +733,6 @@ export async function saveCandidateInformation(
   );
 }
 
-
-/* =========================================================
-   LEGACY COMPATIBILITY EXPORTS
-
-   Existing CandidateInformationForm.js expects these
-   function names.
-========================================================= */
 
 export function getCandidateOnboardingProfile() {
   return getCandidateInformation();
@@ -793,10 +778,6 @@ export async function requestSecureUpload(
 }
 
 
-/*
- * Presigned S3 URL upload.
- * This deliberately does not use apiRequest().
- */
 export async function uploadFileToS3(
   uploadUrl,
   file,
@@ -864,20 +845,18 @@ export async function completeSecureUpload(
 
 export function getCandidateDriverLicense() {
   return apiRequest(
-    "/drivers-license/candidate",
+    "/drivers-license/candidate/status",
     {
       method: "GET",
     }
   );
 }
 
-/* =========================================================
-   DRIVER'S LICENSE - LEGACY COMPATIBILITY
-========================================================= */
 
 export function getDriversLicenseStatus() {
   return getCandidateDriverLicense();
 }
+
 
 /* =========================================================
    DRIVER'S LICENSE - LINK SECURE UPLOAD
@@ -888,6 +867,7 @@ export async function linkDriversLicenseUpload(
 ) {
   const csrfToken =
     await getCandidateCsrfToken();
+
 
   return apiRequest(
     "/drivers-license/candidate/link-upload",
@@ -908,6 +888,10 @@ export async function linkDriversLicenseUpload(
   );
 }
 
+
+/* =========================================================
+   DRIVER'S LICENSE DIRECT UPLOAD
+========================================================= */
 
 export async function uploadCandidateDriverLicense(
   side,
@@ -1022,14 +1006,6 @@ export async function resolveDriverLicenseMismatch(
    DRIVER'S LICENSE LEGACY COMPATIBILITY
 ========================================================= */
 
-/*
- * Existing DriversLicenseReview.js expects:
- *
- * getCompanyDriversLicenseReview
- * resolveDriversLicenseMismatch
- * runCompanyDriversLicenseOcr
- */
-
 export function getCompanyDriversLicenseReview(
   applicationId
 ) {
@@ -1065,7 +1041,7 @@ export async function runCompanyDriversLicenseOcr(
 
 export function getCandidateBackgroundAuthorization() {
   return apiRequest(
-    "/background-checks/candidate/authorization",
+    "/background-authorization/candidate/current",
     {
       method: "GET",
     }
@@ -1081,7 +1057,7 @@ export async function authorizeCandidateBackgroundCheck(
 
 
   return apiRequest(
-    "/background-checks/candidate/authorization",
+    "/background-authorization/candidate/current",
     {
       method: "POST",
 
@@ -1095,6 +1071,24 @@ export async function authorizeCandidateBackgroundCheck(
           payload
         ),
     }
+  );
+}
+
+
+/* =========================================================
+   BACKGROUND AUTHORIZATION - LEGACY COMPATIBILITY
+========================================================= */
+
+export function getBackgroundAuthorization() {
+  return getCandidateBackgroundAuthorization();
+}
+
+
+export async function authorizeBackgroundCheck(
+  payload
+) {
+  return authorizeCandidateBackgroundCheck(
+    payload
   );
 }
 
